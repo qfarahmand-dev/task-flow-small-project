@@ -1,72 +1,107 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { Session } from '@supabase/supabase-js'
 import { AlertCircle, ListChecks } from 'lucide-react'
 import { AuthScreen } from './components/AuthScreen'
 import { Dashboard } from './components/Dashboard'
-import { supabase } from './lib/supabase'
+import { clearTokens, getCurrentUser, restoreTokens, signOut, type AuthUser } from './lib/api'
 
 export default function App() {
-  const [session, setSession] = useState<Session | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [isRecovery, setIsRecovery] = useState(false)
+  const [resetCredentials, setResetCredentials] = useState<{ uid: string; token: string } | null>(null)
+  const [startupError, setStartupError] = useState('')
+  const [authNotice, setAuthNotice] = useState('')
   const [darkMode, setDarkMode] = useState(false)
 
   useEffect(() => {
-    if (!supabase) {
+    const params = new URLSearchParams(window.location.search)
+    const uid = params.get('reset_uid')
+    const token = params.get('reset_token')
+    if (uid && token) {
+      clearTokens()
+      setResetCredentials({ uid, token })
       setIsLoading(false)
       return
     }
 
     let active = true
-    const recoveryInUrl = window.location.hash.includes('type=recovery')
-    if (recoveryInUrl) setIsRecovery(true)
+    if (!restoreTokens()) {
+      setIsLoading(false)
+      return
+    }
 
-    void supabase.auth.getSession().then(({ data }) => {
+    void getCurrentUser().then((currentUser) => {
+      if (active) setUser(currentUser)
+    }).catch((cause: unknown) => {
       if (active) {
-        setSession(data.session)
-        setIsLoading(false)
+        clearTokens()
+        if (!(cause instanceof Error) || !('status' in cause && cause.status === 401)) {
+          setStartupError(cause instanceof Error ? cause.message : 'Could not connect to the API.')
+        }
       }
-    })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      if (!active) return
-      setSession(nextSession)
-      if (event === 'PASSWORD_RECOVERY') setIsRecovery(true)
-      if (event === 'SIGNED_OUT') setIsRecovery(false)
+    }).finally(() => {
+      if (active) setIsLoading(false)
     })
 
     return () => {
       active = false
-      subscription.unsubscribe()
     }
   }, [])
 
-  if (!supabase) {
-    return (
-      <main className="config-page">
-        <section className="config-card">
-          <span className="brand-mark"><ListChecks size={20} /></span>
-          <p className="eyebrow">TASKFLOW SETUP</p>
-          <h1>Connect your workspace</h1>
-          <p>TaskFlow needs the Supabase environment variables before you can sign in.</p>
-          <div className="config-code"><code>VITE_SUPABASE_URL</code><code>VITE_SUPABASE_PUBLISHABLE_KEY</code></div>
-          <div className="form-message error-message"><AlertCircle size={16} /> No data is stored locally or loaded from sample records.</div>
-        </section>
-      </main>
-    )
+  const completePasswordRecovery = () => {
+    setResetCredentials(null)
+    const url = new URL(window.location.href)
+    url.searchParams.delete('reset_uid')
+    url.searchParams.delete('reset_token')
+    window.history.replaceState({}, '', url)
   }
 
-  const client = supabase
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+    } catch (cause) {
+      setAuthNotice(cause instanceof Error
+        ? `You were signed out on this device, but the server could not revoke the session: ${cause.message}`
+        : 'You were signed out on this device, but the server could not revoke the session.')
+    } finally {
+      setUser(null)
+    }
+  }
 
   if (isLoading) {
     return <main className={`loading-page ${darkMode ? 'theme-dark' : 'theme-light'}`} aria-label="Loading TaskFlow"><span className="loading-mark"><ListChecks size={22} /></span><span className="loading-track"><i /></span></main>
   }
 
-  if (!session || isRecovery) {
-    return <AuthScreen client={client} darkMode={darkMode} onToggleTheme={() => setDarkMode((current) => !current)} initialView={isRecovery ? 'update-password' : 'signin'} onRecoveryComplete={() => setIsRecovery(false)} />
+  if (startupError && !user) {
+    return (
+      <main className="config-page">
+        <section className="config-card">
+          <span className="brand-mark"><ListChecks size={20} /></span>
+          <p className="eyebrow">TASKFLOW CONNECTION</p>
+          <h1>Could not reach the workspace</h1>
+          <p>Check that the Django API is running and that NEXT_PUBLIC_API_URL points to its /api address.</p>
+          <div className="form-message error-message" role="alert"><AlertCircle size={16} /> {startupError}</div>
+          <button className="primary-button" type="button" onClick={() => window.location.reload()}>Try again</button>
+        </section>
+      </main>
+    )
   }
 
-  return <Dashboard client={client} user={session.user} darkMode={darkMode} onToggleTheme={() => setDarkMode((current) => !current)} onSignOut={() => client.auth.signOut()} />
+  if (!user) {
+    return <AuthScreen
+      darkMode={darkMode}
+      onToggleTheme={() => setDarkMode((current) => !current)}
+      initialView={resetCredentials ? 'update-password' : 'signin'}
+      initialError={authNotice}
+      resetCredentials={resetCredentials}
+      onAuthenticated={(authenticatedUser) => {
+        setAuthNotice('')
+        setUser(authenticatedUser)
+      }}
+      onRecoveryComplete={completePasswordRecovery}
+    />
+  }
+
+  return <Dashboard user={user} darkMode={darkMode} onToggleTheme={() => setDarkMode((current) => !current)} onSignOut={handleSignOut} />
 }

@@ -19,7 +19,7 @@ import {
   Target,
   TriangleAlert,
 } from 'lucide-react'
-import type { SupabaseClient, User } from '@supabase/supabase-js'
+import type { AuthUser } from '../lib/api'
 import { useTasks } from '../hooks/useTasks'
 import type { Task, TaskDraft } from '../types/task'
 import { TaskDialog } from './TaskDialog'
@@ -29,8 +29,7 @@ type Filter = 'all' | 'pending' | 'completed'
 type SidebarView = 'overview' | 'today' | 'completed'
 
 type DashboardProps = {
-  client: SupabaseClient
-  user: User
+  user: AuthUser
   darkMode: boolean
   onToggleTheme: () => void
   onSignOut: () => Promise<unknown>
@@ -65,8 +64,8 @@ function formatCreatedAt(value: string) {
   return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(new Date(value))
 }
 
-export function Dashboard({ client, user, darkMode, onToggleTheme, onSignOut }: DashboardProps) {
-  const { tasks, isLoading, error, loadTasks, createTask, updateTask, deleteTask } = useTasks(client, user.id)
+export function Dashboard({ user, darkMode, onToggleTheme, onSignOut }: DashboardProps) {
+  const { tasks, isLoading, error, loadTasks, createTask, updateTask, deleteTask } = useTasks(user.id)
   const [filter, setFilter] = useState<Filter>('all')
   const [sidebarView, setSidebarView] = useState<SidebarView>('overview')
   const [search, setSearch] = useState('')
@@ -149,6 +148,8 @@ export function Dashboard({ client, user, darkMode, onToggleTheme, onSignOut }: 
     setIsSigningOut(true)
     try {
       await onSignOut()
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : 'Could not sign out cleanly.')
     } finally {
       setIsSigningOut(false)
     }

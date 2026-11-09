@@ -9,24 +9,26 @@ import {
   Moon,
   Sun,
 } from 'lucide-react'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { confirmPasswordReset, requestPasswordReset, signIn, signUp, type AuthUser } from '../lib/api'
 
 type AuthView = 'signin' | 'signup' | 'forgot' | 'update-password'
 
 type AuthScreenProps = {
-  client: SupabaseClient
   darkMode: boolean
   onToggleTheme: () => void
   initialView?: AuthView
+  initialError?: string
+  resetCredentials: { uid: string; token: string } | null
+  onAuthenticated: (user: AuthUser) => void
   onRecoveryComplete: () => void
 }
 
 function friendlyAuthError(message: string) {
   const normalized = message.toLowerCase()
-  if (normalized.includes('invalid login credentials') || normalized.includes('user not found')) {
+  if (normalized.includes('no active account') || normalized.includes('invalid login credentials') || normalized.includes('user not found')) {
     return 'Email or password is incorrect. Check your details or reset your password.'
   }
-  if (normalized.includes('already registered') || normalized.includes('already been registered')) {
+  if (normalized.includes('already registered') || normalized.includes('already been registered') || normalized.includes('email: user with this email already exists')) {
     return 'We could not create an account with those details. Try signing in or resetting your password.'
   }
   if (normalized.includes('email not confirmed')) {
@@ -35,7 +37,7 @@ function friendlyAuthError(message: string) {
   return message
 }
 
-export function AuthScreen({ client, darkMode, onToggleTheme, initialView = 'signin', onRecoveryComplete }: AuthScreenProps) {
+export function AuthScreen({ darkMode, onToggleTheme, initialView = 'signin', initialError = '', resetCredentials, onAuthenticated, onRecoveryComplete }: AuthScreenProps) {
   const [view, setView] = useState<AuthView>(initialView)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -48,6 +50,10 @@ export function AuthScreen({ client, darkMode, onToggleTheme, initialView = 'sig
   useEffect(() => {
     if (initialView === 'update-password') setView('update-password')
   }, [initialView])
+
+  useEffect(() => {
+    if (initialError) setError(initialError)
+  }, [initialError])
 
   const changeView = (next: AuthView) => {
     setView(next)
@@ -64,33 +70,20 @@ export function AuthScreen({ client, darkMode, onToggleTheme, initialView = 'sig
 
     try {
       if (view === 'signup') {
-        const { data, error: signUpError } = await client.auth.signUp({
-          email: email.trim(),
-          password,
-        })
-        if (signUpError) throw signUpError
-        if (!data.session) {
-          setMessage('Check your inbox for a confirmation link. Once your email is verified, you can sign in.')
-        }
+        onAuthenticated(await signUp(email.trim(), password))
       } else if (view === 'forgot') {
-        const { error: resetError } = await client.auth.resetPasswordForEmail(email.trim(), {
-          redirectTo: window.location.origin,
-        })
-        if (resetError) throw resetError
+        await requestPasswordReset(email.trim())
         setMessage('If an account exists for that email, a password reset link is on its way.')
       } else if (view === 'update-password') {
-        const { error: updateError } = await client.auth.updateUser({ password: newPassword })
-        if (updateError) throw updateError
+        if (!resetCredentials) throw new Error('This password reset link is missing or invalid. Request a new one.')
+        await confirmPasswordReset(resetCredentials.uid, resetCredentials.token, newPassword)
         setMessage('Your password has been updated. You can continue to your workspace.')
         onRecoveryComplete()
+        setView('signin')
         setPassword('')
         setNewPassword('')
       } else {
-        const { error: signInError } = await client.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        })
-        if (signInError) throw signInError
+        onAuthenticated(await signIn(email.trim(), password))
       }
     } catch (cause) {
       setError(friendlyAuthError(cause instanceof Error ? cause.message : 'Please try again.'))
