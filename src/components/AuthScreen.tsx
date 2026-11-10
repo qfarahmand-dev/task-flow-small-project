@@ -9,7 +9,7 @@ import {
   Moon,
   Sun,
 } from 'lucide-react'
-import { confirmPasswordReset, requestPasswordReset, signIn, signUp, type AuthUser } from '../lib/api'
+import { confirmPasswordReset, requestPasswordReset, resendVerification, signIn, signUp, type AuthUser } from '../lib/api'
 
 type AuthView = 'signin' | 'signup' | 'forgot' | 'update-password'
 
@@ -26,7 +26,7 @@ type AuthScreenProps = {
 function friendlyAuthError(message: string) {
   const normalized = message.toLowerCase()
   if (normalized.includes('no active account') || normalized.includes('invalid login credentials') || normalized.includes('user not found')) {
-    return 'Email or password is incorrect. Check your details or reset your password.'
+    return 'Email or password is incorrect, or your email is not verified yet. Accounts are created only after you click the link we email you.'
   }
   if (normalized.includes('already registered') || normalized.includes('already been registered') || normalized.includes('email: user with this email already exists')) {
     return 'We could not create an account with those details. Try signing in or resetting your password.'
@@ -46,6 +46,7 @@ export function AuthScreen({ darkMode, onToggleTheme, initialView = 'signin', in
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [pendingVerification, setPendingVerification] = useState(false)
 
   useEffect(() => {
     if (initialView === 'update-password') setView('update-password')
@@ -60,6 +61,20 @@ export function AuthScreen({ darkMode, onToggleTheme, initialView = 'signin', in
     setError('')
     setMessage('')
     setPassword('')
+    setPendingVerification(false)
+  }
+
+  const handleResend = async () => {
+    setError('')
+    setIsSubmitting(true)
+    try {
+      const result = await resendVerification(email.trim())
+      setMessage(result.detail)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -70,7 +85,10 @@ export function AuthScreen({ darkMode, onToggleTheme, initialView = 'signin', in
 
     try {
       if (view === 'signup') {
-        onAuthenticated(await signUp(email.trim(), password))
+        const result = await signUp(email.trim(), password)
+        setPassword('')
+        setPendingVerification(true)
+        setMessage(result.detail)
       } else if (view === 'forgot') {
         await requestPasswordReset(email.trim())
         setMessage('If an account exists for that email, a password reset link is on its way.')
@@ -149,6 +167,10 @@ export function AuthScreen({ darkMode, onToggleTheme, initialView = 'signin', in
 
             {error && <div className="form-message error-message" role="alert">{error}</div>}
             {message && <div className="form-message success-message" role="status">{message}</div>}
+
+            {pendingVerification && view === 'signup' && (
+              <button type="button" className="forgot-link" onClick={handleResend} disabled={isSubmitting || !email.trim()}>Resend verification email</button>
+            )}
 
             <form className="auth-form" onSubmit={handleSubmit}>
               {view !== 'update-password' && (

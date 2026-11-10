@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { AlertCircle, ListChecks } from 'lucide-react'
 import { AuthScreen } from './components/AuthScreen'
 import { Dashboard } from './components/Dashboard'
-import { clearTokens, getCurrentUser, restoreTokens, signOut, type AuthUser } from './lib/api'
+import { clearTokens, getCurrentUser, restoreTokens, signOut, verifyEmail, type AuthUser } from './lib/api'
 
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -12,10 +12,24 @@ export default function App() {
   const [resetCredentials, setResetCredentials] = useState<{ uid: string; token: string } | null>(null)
   const [startupError, setStartupError] = useState('')
   const [authNotice, setAuthNotice] = useState('')
+  const [authError, setAuthError] = useState('')
   const [darkMode, setDarkMode] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
+    const verifyToken = params.get('verify_token')
+    if (verifyToken) {
+      clearTokens()
+      const url = new URL(window.location.href)
+      url.searchParams.delete('verify_token')
+      window.history.replaceState({}, '', url)
+      void verifyEmail(verifyToken)
+        .then((verifiedUser) => setUser(verifiedUser))
+        .catch((cause: unknown) => setAuthError(cause instanceof Error ? cause.message : 'Could not verify your email.'))
+        .finally(() => setIsLoading(false))
+      return
+    }
+
     const uid = params.get('reset_uid')
     const token = params.get('reset_token')
     if (uid && token) {
@@ -93,7 +107,7 @@ export default function App() {
       darkMode={darkMode}
       onToggleTheme={() => setDarkMode((current) => !current)}
       initialView={resetCredentials ? 'update-password' : 'signin'}
-      initialError={authNotice}
+      initialError={authError || authNotice}
       resetCredentials={resetCredentials}
       onAuthenticated={(authenticatedUser) => {
         setAuthNotice('')
