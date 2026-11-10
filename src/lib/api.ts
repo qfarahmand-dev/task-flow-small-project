@@ -141,13 +141,25 @@ export async function signIn(email: string, password: string) {
   }
 }
 
-export async function signUp(email: string, password: string) {
-  const result = await apiRequest<AuthResponse>('/auth/register/', {
+export function signUp(email: string, password: string) {
+  return apiRequest<{ detail: string }>('/auth/register/', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   })
-  saveTokens(result)
-  return result.user ?? getCurrentUser()
+}
+
+export function verifyEmail(uid: string, token: string) {
+  return apiRequest<{ detail: string }>('/auth/verify-email/', {
+    method: 'POST',
+    body: JSON.stringify({ uid, token }),
+  })
+}
+
+export function resendVerification(email: string) {
+  return apiRequest<{ detail: string }>('/auth/resend-verification/', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  })
 }
 
 export function getCurrentUser() {

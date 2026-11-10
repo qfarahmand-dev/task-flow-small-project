@@ -32,7 +32,7 @@ Railway configuration files provide install/build/start commands and health chec
 
 ## API
 
-- `POST /api/auth/register/`, `POST /api/auth/token/`, `POST /api/auth/token/refresh/`
+- `POST /api/auth/register/` (emails a verification link), `POST /api/auth/verify-email/`, `POST /api/auth/token/`, `POST /api/auth/token/refresh/`
 - `GET /api/auth/me/`, `POST /api/auth/logout/`
 - `POST /api/auth/password-reset/`, `POST /api/auth/password-reset/confirm/`
 - `GET|POST /api/tasks/`, `GET|PATCH|DELETE /api/tasks/<uuid>/`
