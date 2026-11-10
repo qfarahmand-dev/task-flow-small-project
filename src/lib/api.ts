@@ -148,11 +148,13 @@ export function signUp(email: string, password: string) {
   })
 }
 
-export function verifyEmail(uid: string, token: string) {
-  return apiRequest<{ detail: string }>('/auth/verify-email/', {
+export async function verifyEmail(token: string) {
+  const result = await apiRequest<AuthResponse>('/auth/verify-email/', {
     method: 'POST',
-    body: JSON.stringify({ uid, token }),
+    body: JSON.stringify({ token }),
   })
+  saveTokens(result)
+  return result.user ?? getCurrentUser()
 }
 
 export function resendVerification(email: string) {

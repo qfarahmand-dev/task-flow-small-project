@@ -18,7 +18,6 @@ type AuthScreenProps = {
   onToggleTheme: () => void
   initialView?: AuthView
   initialError?: string
-  initialMessage?: string
   resetCredentials: { uid: string; token: string } | null
   onAuthenticated: (user: AuthUser) => void
   onRecoveryComplete: () => void
@@ -27,7 +26,7 @@ type AuthScreenProps = {
 function friendlyAuthError(message: string) {
   const normalized = message.toLowerCase()
   if (normalized.includes('no active account') || normalized.includes('invalid login credentials') || normalized.includes('user not found')) {
-    return 'Email or password is incorrect, or your email is not verified yet. Check your inbox for the verification link.'
+    return 'Email or password is incorrect, or your email is not verified yet. Accounts are created only after you click the link we email you.'
   }
   if (normalized.includes('already registered') || normalized.includes('already been registered') || normalized.includes('email: user with this email already exists')) {
     return 'We could not create an account with those details. Try signing in or resetting your password.'
@@ -38,7 +37,7 @@ function friendlyAuthError(message: string) {
   return message
 }
 
-export function AuthScreen({ darkMode, onToggleTheme, initialView = 'signin', initialError = '', initialMessage = '', resetCredentials, onAuthenticated, onRecoveryComplete }: AuthScreenProps) {
+export function AuthScreen({ darkMode, onToggleTheme, initialView = 'signin', initialError = '', resetCredentials, onAuthenticated, onRecoveryComplete }: AuthScreenProps) {
   const [view, setView] = useState<AuthView>(initialView)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -52,10 +51,6 @@ export function AuthScreen({ darkMode, onToggleTheme, initialView = 'signin', in
   useEffect(() => {
     if (initialView === 'update-password') setView('update-password')
   }, [initialView])
-
-  useEffect(() => {
-    if (initialMessage) setMessage(initialMessage)
-  }, [initialMessage])
 
   useEffect(() => {
     if (initialError) setError(initialError)
@@ -91,7 +86,6 @@ export function AuthScreen({ darkMode, onToggleTheme, initialView = 'signin', in
     try {
       if (view === 'signup') {
         const result = await signUp(email.trim(), password)
-        setView('signin')
         setPassword('')
         setPendingVerification(true)
         setMessage(result.detail)
@@ -174,7 +168,7 @@ export function AuthScreen({ darkMode, onToggleTheme, initialView = 'signin', in
             {error && <div className="form-message error-message" role="alert">{error}</div>}
             {message && <div className="form-message success-message" role="status">{message}</div>}
 
-            {pendingVerification && view === 'signin' && (
+            {pendingVerification && view === 'signup' && (
               <button type="button" className="forgot-link" onClick={handleResend} disabled={isSubmitting || !email.trim()}>Resend verification email</button>
             )}
 

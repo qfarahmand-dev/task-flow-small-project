@@ -13,21 +13,18 @@ export default function App() {
   const [startupError, setStartupError] = useState('')
   const [authNotice, setAuthNotice] = useState('')
   const [authError, setAuthError] = useState('')
-  const [authSuccess, setAuthSuccess] = useState('')
   const [darkMode, setDarkMode] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const verifyUid = params.get('verify_uid')
     const verifyToken = params.get('verify_token')
-    if (verifyUid && verifyToken) {
+    if (verifyToken) {
       clearTokens()
       const url = new URL(window.location.href)
-      url.searchParams.delete('verify_uid')
       url.searchParams.delete('verify_token')
       window.history.replaceState({}, '', url)
-      void verifyEmail(verifyUid, verifyToken)
-        .then((result) => setAuthSuccess(result.detail))
+      void verifyEmail(verifyToken)
+        .then((verifiedUser) => setUser(verifiedUser))
         .catch((cause: unknown) => setAuthError(cause instanceof Error ? cause.message : 'Could not verify your email.'))
         .finally(() => setIsLoading(false))
       return
@@ -111,7 +108,6 @@ export default function App() {
       onToggleTheme={() => setDarkMode((current) => !current)}
       initialView={resetCredentials ? 'update-password' : 'signin'}
       initialError={authError || authNotice}
-      initialMessage={authSuccess}
       resetCredentials={resetCredentials}
       onAuthenticated={(authenticatedUser) => {
         setAuthNotice('')
